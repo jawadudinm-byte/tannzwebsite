@@ -1,6 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 export default function ProductCard({ product, onSelect }) {
+  const [imageLoaded, setImageLoaded] = useState(false);
+
+  // Safe fallback image handling
   const mainImage = product.colors?.[0]?.images?.[0] || 'https://via.placeholder.com/600';
 
   return (
@@ -10,14 +13,26 @@ export default function ProductCard({ product, onSelect }) {
     >
       <div>
         {/* Product Image Container */}
-        <div className="w-full h-80 sm:h-96 bg-stone-200 overflow-hidden relative">
+        <div className="w-full h-80 sm:h-96 bg-stone-200/70 overflow-hidden relative">
+          
+          {/* Fast Skeleton effect when image is downloading */}
+          {!imageLoaded && (
+            <div className="absolute inset-0 bg-stone-300/60 animate-pulse" />
+          )}
+
           <img 
             src={mainImage} 
             alt={product.name} 
-            className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+            loading="lazy"
+            decoding="async"
+            onLoad={() => setImageLoaded(true)}
+            className={`w-full h-full object-cover object-center group-hover:scale-105 transition-all duration-500 ${
+              imageLoaded ? 'opacity-100' : 'opacity-0'
+            }`}
           />
+
           {!product.inStock && (
-            <span className="absolute top-3 right-3 bg-red-600 text-white text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded">
+            <span className="absolute top-3 right-3 bg-red-600 text-white text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded z-10">
               Out of Stock
             </span>
           )}

@@ -18,9 +18,20 @@ export default function App() {
     fetchProductsFromSupabase();
   }, []);
 
-  const fetchProductsFromSupabase = async () => {
-    setLoading(true);
+  const fetchProductsFromSupabase = async (forceRefresh = false) => {
+    // ⚡ INSTANT LOAD: Pehle LocalStorage se cached data load karein
+    if (!forceRefresh) {
+      const cached = localStorage.getItem('tannz_products_data');
+      if (cached) {
+        setProducts(JSON.parse(cached));
+        setLoading(false);
+      }
+    } else {
+      setLoading(true);
+    }
+
     try {
+      // Full select taaki images wali 'colors' array accurate aaye
       const { data, error } = await supabase
         .from('products')
         .select('*')
@@ -38,12 +49,16 @@ export default function App() {
           stock: item.stock || {},
           inStock: item.in_stock
         }));
+
         setProducts(mapped);
+        // Cache update karein taaki next reload par Zero Wait time ho
+        localStorage.setItem('tannz_products_data', JSON.stringify(mapped));
       }
     } catch (err) {
       console.error("Failed to load products from DB:", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   if (view === 'admin') {
@@ -51,11 +66,11 @@ export default function App() {
       <AdminDashboard 
         onGoToStore={() => {
           setView('store');
-          fetchProductsFromSupabase(); // Refresh store when returning
+          fetchProductsFromSupabase(true); // Admin se wapas aane par fresh data load karein
         }}
         products={products}
         setProducts={setProducts}
-        refreshProducts={fetchProductsFromSupabase}
+        refreshProducts={() => fetchProductsFromSupabase(true)}
       />
     );
   }
@@ -75,9 +90,26 @@ export default function App() {
             </p>
           </div>
 
-          {loading ? (
-            <div className="text-center py-12 font-bold text-stone-500 italic">
-              Loading Products Collection...
+          {loading && products.length === 0 ? (
+            <div className="py-12 flex flex-col items-center justify-center space-y-8">
+              {/* Bouncing Dots Loading Bar */}
+              <div className="flex items-center space-x-2">
+                <span className="text-stone-600 font-semibold text-base sm:text-lg tracking-wide">
+                  Loading Products
+                </span>
+                <div className="flex space-x-1.5 items-end h-4">
+                  <div className="w-2 h-2 bg-stone-700 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                  <div className="w-2 h-2 bg-stone-700 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                  <div className="w-2 h-2 bg-stone-700 rounded-full animate-bounce"></div>
+                </div>
+              </div>
+
+              {/* Skeleton Cards Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 sm:gap-8 w-full">
+                {[1, 2, 3, 4, 5, 6].map((n) => (
+                  <div key={n} className="animate-pulse bg-stone-200/70 rounded-2xl h-80 w-full"></div>
+                ))}
+              </div>
             </div>
           ) : products.length === 0 ? (
             <div className="text-center py-12 font-bold text-stone-500">

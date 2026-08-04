@@ -9,7 +9,7 @@ export default function ProductDetailModal({ product, onClose }) {
   const [selectedColor, setSelectedColor] = useState(product.colors?.[0] || null);
   const [selectedImage, setSelectedImage] = useState(product.colors?.[0]?.images?.[0] || '');
   const [selectedSize, setSelectedSize] = useState('M');
-  const [quantity, setQuantity] = useState(1); // 👈 Quantity State
+  const [quantity, setQuantity] = useState(1);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -26,11 +26,9 @@ export default function ProductDetailModal({ product, onClose }) {
     }
   };
 
-  // Live stock check based on selected color & size
   const currentStock = product.stock?.[selectedColor?.name]?.[selectedSize] ?? 0;
   const isOutOfStock = currentStock === 0;
 
-  // Quantity Control Handlers
   const handleIncreaseQty = () => {
     if (quantity < currentStock) {
       setQuantity(prev => prev + 1);
@@ -50,16 +48,16 @@ export default function ProductDetailModal({ product, onClose }) {
 
     const orderMessage = `Hi TANNZ! I want to order from your website:\n\n📌 Product: ${product.name}\n🎨 Color: ${selectedColor?.name || 'Default'}\n📏 Size: ${selectedSize}\n🔢 Quantity: ${quantity}\n💰 Total Price: ₹${totalPrice.toLocaleString('en-IN')}\n\nPlease share payment details for delivery!`;
 
+    // Copy to clipboard
     navigator.clipboard.writeText(orderMessage);
     setCopied(true);
 
-    const encodedMessage = encodeURIComponent(orderMessage);
-    const igDirectUrl = `https://ig.me/m/${INSTAGRAM_HANDLE}?text=${encodedMessage}`;
+    const igDirectUrl = `https://ig.me/m/${INSTAGRAM_HANDLE}`;
 
     setTimeout(() => {
       window.open(igDirectUrl, '_blank');
       setCopied(false);
-    }, 500);
+    }, 1200);
   };
 
   return (
@@ -189,7 +187,7 @@ export default function ProductDetailModal({ product, onClose }) {
                         key={sz}
                         onClick={() => {
                           setSelectedSize(sz);
-                          setQuantity(1); // Reset qty on size change
+                          setQuantity(1);
                         }}
                         className={`px-4 py-2 text-xs font-bold rounded-md transition-all ${
                           selectedSize === sz
@@ -206,7 +204,7 @@ export default function ProductDetailModal({ product, onClose }) {
                 </div>
               </div>
 
-              {/* 👈 QUANTITY SELECTOR BUTTONS (- 1 +) */}
+              {/* Quantity Selector */}
               {!isOutOfStock && (
                 <div className="mt-5">
                   <label className="block text-xs font-bold uppercase tracking-wider mb-2 text-stone-700">
@@ -242,13 +240,15 @@ export default function ProductDetailModal({ product, onClose }) {
             </div>
 
             {/* Buy Action Button */}
-            <div className="mt-6 pt-4 border-t border-stone-300">
+            <div className="mt-6 pt-4 border-t border-stone-300 space-y-2">
               <button
                 disabled={isOutOfStock}
                 onClick={handleBuyNow}
-                className={`w-full font-bold py-3.5 px-4 rounded-xl shadow-lg flex items-center justify-center gap-2 text-sm sm:text-base tracking-wider uppercase transition-transform active:scale-[0.98] ${
+                className={`w-full font-bold py-3.5 px-4 rounded-xl shadow-lg flex items-center justify-center gap-2 text-sm sm:text-base tracking-wider uppercase transition-all active:scale-[0.98] ${
                   isOutOfStock
                     ? 'bg-stone-400 text-stone-200 cursor-not-allowed'
+                    : copied
+                    ? 'bg-emerald-700 text-white scale-105'
                     : 'bg-[var(--color-tannz-dark)] text-[var(--color-tannz-cream)] hover:opacity-95'
                 }`}
               >
@@ -256,10 +256,16 @@ export default function ProductDetailModal({ product, onClose }) {
                   {isOutOfStock
                     ? 'Out of Stock'
                     : copied
-                    ? '✓ Text Copied! Opening DM...'
-                    : `Buy Now on Instagram (₹${totalPrice.toLocaleString('en-IN')}) ↗`}
+                    ? '✓ Order Details Copied! Opening Instagram...'
+                    : `Order on Instagram DM (₹${totalPrice.toLocaleString('en-IN')}) ↗`}
                 </span>
               </button>
+
+              {!isOutOfStock && (
+                <p className="text-[11px] text-center text-stone-500 font-semibold italic">
+                  💡 Order details automatically copy ho jayenge, DM khulte hi bas <b className="text-stone-800">Paste</b> kar dein!
+                </p>
+              )}
             </div>
 
             <ProductComments productId={product.id} />

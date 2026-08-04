@@ -207,8 +207,9 @@ export default function AdminDashboard({ onGoToStore, products = [], setProducts
     setProductForm({ ...productForm, colors: updated });
   };
 
+  // ⚡ APPEND NEW UPLOADED IMAGES TO EXISTING LIST
   const handleImageFileUpload = (colorIndex, e) => {
-    const files = Array.from(e.target.files).slice(0, 3);
+    const files = Array.from(e.target.files);
     if (!files.length) return;
 
     const readFiles = files.map(file => {
@@ -219,11 +220,22 @@ export default function AdminDashboard({ onGoToStore, products = [], setProducts
       });
     });
 
-    Promise.all(readFiles).then(base64Images => {
+    Promise.all(readFiles).then(newBase64Images => {
       const updated = [...productForm.colors];
-      updated[colorIndex].images = base64Images;
+      const existingImages = updated[colorIndex].images || [];
+      // Combine old images + new images
+      updated[colorIndex].images = [...existingImages, ...newBase64Images];
       setProductForm({ ...productForm, colors: updated });
     });
+    // Reset input value to allow uploading same image if needed
+    e.target.value = null;
+  };
+
+  // ⚡ INDIVIDUAL DUSTBIN DELETE FOR A SINGLE IMAGE SLOT
+  const handleRemoveSingleImage = (colorIndex, imageIndex) => {
+    const updated = [...productForm.colors];
+    updated[colorIndex].images = updated[colorIndex].images.filter((_, idx) => idx !== imageIndex);
+    setProductForm({ ...productForm, colors: updated });
   };
 
   const handleColorStockChange = (colorIndex, size, qty) => {
@@ -662,21 +674,51 @@ export default function AdminDashboard({ onGoToStore, products = [], setProducts
                         </div>
                       </div>
 
+                      {/* ⚡ MULTI-SLOT IMAGE MANAGER WITH INDIVIDUAL DUSTBIN DELETE */}
                       <div className="bg-stone-50 p-3 rounded-lg border border-stone-200">
-                        <label className="block font-bold mb-1">Upload Photos (Select up to 3):</label>
-                        <input 
-                          type="file" 
-                          accept="image/*"
-                          multiple
-                          onChange={(e) => handleImageFileUpload(cIdx, e)}
-                          className="block w-full text-xs text-stone-600 cursor-pointer"
-                        />
-                        {col.images?.length > 0 && (
-                          <div className="flex gap-2 mt-2">
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="block font-bold text-stone-800">
+                            Photo Slots ({col.images?.length || 0} Photos)
+                          </label>
+                          <label className="cursor-pointer bg-stone-800 text-white px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider hover:bg-stone-900 transition-colors">
+                            + Add Image Slot
+                            <input 
+                              type="file" 
+                              accept="image/*"
+                              multiple
+                              onChange={(e) => handleImageFileUpload(cIdx, e)}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+
+                        {/* Image Preview Slots Grid */}
+                        {col.images?.length > 0 ? (
+                          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 mt-3">
                             {col.images.map((imgSrc, imgIdx) => (
-                              <img key={imgIdx} src={imgSrc} alt="prev" className="w-12 h-14 object-cover rounded border" />
+                              <div key={imgIdx} className="relative group border border-stone-300 rounded-lg overflow-hidden bg-white shadow-sm">
+                                <img 
+                                  src={imgSrc} 
+                                  alt={`slot-${imgIdx}`} 
+                                  className="w-full h-20 object-cover" 
+                                />
+                                {/* 🗑️ DUSTBIN DELETE BUTTON */}
+                                <button
+                                  type="button"
+                                  title="Delete image"
+                                  onClick={() => handleRemoveSingleImage(cIdx, imgIdx)}
+                                  className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shadow-md transition-transform hover:scale-110"
+                                >
+                                  🗑️
+                                </button>
+                                <span className="absolute bottom-1 left-1 bg-black/60 text-white text-[9px] px-1 rounded font-bold">
+                                  #{imgIdx + 1}
+                                </span>
+                              </div>
                             ))}
                           </div>
+                        ) : (
+                          <p className="text-[11px] text-stone-500 italic py-2">No photos added yet. Click above to upload.</p>
                         )}
                       </div>
 
