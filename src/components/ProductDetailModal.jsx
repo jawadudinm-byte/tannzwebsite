@@ -43,21 +43,23 @@ export default function ProductDetailModal({ product, onClose }) {
 
   const totalPrice = product.price * quantity;
 
+  // ⚡ INSTAGRAM REDIRECT & COPY FIX FOR MOBILE
   const handleBuyNow = () => {
     if (isOutOfStock) return;
 
     const orderMessage = `Hi TANNZ! I want to order from your website:\n\n📌 Product: ${product.name}\n🎨 Color: ${selectedColor?.name || 'Default'}\n📏 Size: ${selectedSize}\n🔢 Quantity: ${quantity}\n💰 Total Price: ₹${totalPrice.toLocaleString('en-IN')}\n\nPlease share payment details for delivery!`;
 
-    // Copy to clipboard
+    // 1. Copy message to clipboard
     navigator.clipboard.writeText(orderMessage);
     setCopied(true);
 
-    const igDirectUrl = `https://ig.me/m/${INSTAGRAM_HANDLE}`;
+    // 2. Direct Instagram profile link (100% works on mobile app)
+    const igUrl = `https://instagram.com/${INSTAGRAM_HANDLE}`;
 
+    // Mobile popup blocker avoid karne ke liye fast redirect
     setTimeout(() => {
-      window.open(igDirectUrl, '_blank');
-      setCopied(false);
-    }, 1200);
+      window.location.href = igUrl;
+    }, 400);
   };
 
   return (
@@ -263,7 +265,7 @@ export default function ProductDetailModal({ product, onClose }) {
 
               {!isOutOfStock && (
                 <p className="text-[11px] text-center text-stone-500 font-semibold italic">
-                  💡 Order details automatically copy ho jayenge, DM khulte hi bas <b className="text-stone-800">Paste</b> kar dein!
+                  💡 Order details automatically copy ho jayenge, DM/Chat khulte hi bas <b className="text-stone-800">Paste</b> kar dein!
                 </p>
               )}
             </div>
