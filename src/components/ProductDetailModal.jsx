@@ -7,22 +7,24 @@ export default function ProductDetailModal({ product, onClose }) {
   if (!product) return null;
 
   const [selectedColor, setSelectedColor] = useState(product.colors?.[0] || null);
-  const [selectedImage, setSelectedImage] = useState(product.colors?.[0]?.images?.[0] || '');
+  const [selectedImage, setSelectedImage] = useState(product.image_url || product.colors?.[0]?.images?.[0] || '');
   const [selectedSize, setSelectedSize] = useState('M');
   const [quantity, setQuantity] = useState(1);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (product.colors && product.colors.length > 0) {
-      setSelectedColor(product.colors[0]);
-      setSelectedImage(product.colors[0].images?.[0] || '');
+    if (product) {
+      setSelectedColor(product.colors?.[0] || null);
+      setSelectedImage(product.image_url || product.colors?.[0]?.images?.[0] || '');
     }
   }, [product]);
 
   const handleColorChange = (colorObj) => {
     setSelectedColor(colorObj);
-    if (colorObj.images && colorObj.images.length > 0) {
+    if (colorObj?.images && colorObj.images.length > 0) {
       setSelectedImage(colorObj.images[0]);
+    } else if (product.image_url) {
+      setSelectedImage(product.image_url);
     }
   };
 

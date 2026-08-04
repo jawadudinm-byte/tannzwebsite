@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { uploadProductImage, deleteProductImage } from '../lib/storage';
 
 export default function AdminDashboard({ onGoToStore, products = [], setProducts, refreshProducts }) {
   const [session, setSession] = useState(null);
@@ -20,6 +21,8 @@ export default function AdminDashboard({ onGoToStore, products = [], setProducts
   const [editingProduct, setEditingProduct] = useState(null);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [savingProduct, setSavingProduct] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [removedImageUrls, setRemovedImageUrls] = useState([]);
 
   const [productForm, setProductForm] = useState({
     id: null,
@@ -110,15 +113,27 @@ export default function AdminDashboard({ onGoToStore, products = [], setProducts
     setSession(null);
   };
 
-  // Permanent Delete Product from Supabase DB
+  // Permanent Delete Product from Supabase DB & Storage
   const handleDeleteProduct = async (productId) => {
     if (window.confirm("Delete this product permanently from database?")) {
+      const targetProduct = products.find(p => p.id === productId);
+
       const { error } = await supabase
         .from('products')
         .delete()
         .eq('id', productId);
 
       if (!error) {
+        // Clean up storage images
+        if (targetProduct) {
+          const urlsToDelete = new Set();
+          if (targetProduct.image_url) urlsToDelete.add(targetProduct.image_url);
+          targetProduct.colors?.forEach(col => {
+            col.images?.forEach(img => urlsToDelete.add(img));
+          });
+          Array.from(urlsToDelete).forEach(url => deleteProductImage(url));
+        }
+
         if (refreshProducts) refreshProducts();
         else setProducts(products.filter(p => p.id !== productId));
       } else {
@@ -138,10 +153,11 @@ export default function AdminDashboard({ onGoToStore, products = [], setProducts
 
   const handleOpenEdit = (product) => {
     setEditingProduct(product);
+    setRemovedImageUrls([]);
     const mappedColors = product.colors?.map(c => ({
       name: c.name,
       hex: c.hex || '#000000',
-      images: c.images?.length ? c.images : ['https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800'],
+      images: c.images?.length ? c.images : [product.image_url || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800'],
       stock: product.stock?.[c.name] || { M: 5, L: 5, XL: 5 }
     })) || [];
 
@@ -152,7 +168,7 @@ export default function AdminDashboard({ onGoToStore, products = [], setProducts
       description: product.description || '',
       sizes: product.sizes || ['M', 'L', 'XL'],
       colors: mappedColors.length > 0 ? mappedColors : [
-        { name: 'Cream', hex: '#F4EFE6', images: ['https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800'], stock: { M: 5, L: 5, XL: 5 } }
+        { name: 'Cream', hex: '#F4EFE6', images: [product.image_url || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800'], stock: { M: 5, L: 5, XL: 5 } }
       ]
     });
     setIsProductModalOpen(true);
@@ -160,6 +176,7 @@ export default function AdminDashboard({ onGoToStore, products = [], setProducts
 
   const handleOpenAddNew = () => {
     setEditingProduct(null);
+    setRemovedImageUrls([]);
     setProductForm({
       id: null,
       name: '',
@@ -170,7 +187,7 @@ export default function AdminDashboard({ onGoToStore, products = [], setProducts
         {
           name: 'Cream',
           hex: '#F4EFE6',
-          images: ['https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800'],
+          images: [],
           stock: { M: 10, L: 5, XL: 2 }
         }
       ]
@@ -186,7 +203,7 @@ export default function AdminDashboard({ onGoToStore, products = [], setProducts
         {
           name: 'New Color',
           hex: '#333333',
-          images: ['https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800'],
+          images: [],
           stock: { M: 5, L: 5, XL: 0 }
         }
       ]
@@ -195,6 +212,10 @@ export default function AdminDashboard({ onGoToStore, products = [], setProducts
 
   const handleRemoveColorRow = (index) => {
     if (productForm.colors.length <= 1) return;
+    const removedColor = productForm.colors[index];
+    if (removedColor?.images?.length) {
+      setRemovedImageUrls(prev => [...prev, ...removedColor.images]);
+    }
     setProductForm({
       ...productForm,
       colors: productForm.colors.filter((_, i) => i !== index)
@@ -207,32 +228,35 @@ export default function AdminDashboard({ onGoToStore, products = [], setProducts
     setProductForm({ ...productForm, colors: updated });
   };
 
-  // ⚡ APPEND NEW UPLOADED IMAGES TO EXISTING LIST
-  const handleImageFileUpload = (colorIndex, e) => {
+  // ⚡ UPLOAD IMAGES TO SUPABASE STORAGE AND APPEND PUBLIC URLS
+  const handleImageFileUpload = async (colorIndex, e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
 
-    const readFiles = files.map(file => {
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (event) => resolve(event.target.result);
-        reader.readAsDataURL(file);
-      });
-    });
+    setUploadingImage(true);
+    try {
+      const uploadPromises = files.map(file => uploadProductImage(file));
+      const uploadResults = await Promise.all(uploadPromises);
+      const newPublicUrls = uploadResults.map(res => res.publicUrl);
 
-    Promise.all(readFiles).then(newBase64Images => {
       const updated = [...productForm.colors];
       const existingImages = updated[colorIndex].images || [];
-      // Combine old images + new images
-      updated[colorIndex].images = [...existingImages, ...newBase64Images];
+      updated[colorIndex].images = [...existingImages, ...newPublicUrls];
       setProductForm({ ...productForm, colors: updated });
-    });
-    // Reset input value to allow uploading same image if needed
-    e.target.value = null;
+    } catch (err) {
+      alert("Image upload failed: " + err.message);
+    } finally {
+      setUploadingImage(false);
+      e.target.value = null;
+    }
   };
 
   // ⚡ INDIVIDUAL DUSTBIN DELETE FOR A SINGLE IMAGE SLOT
   const handleRemoveSingleImage = (colorIndex, imageIndex) => {
+    const targetUrl = productForm.colors[colorIndex]?.images?.[imageIndex];
+    if (targetUrl) {
+      setRemovedImageUrls(prev => [...prev, targetUrl]);
+    }
     const updated = [...productForm.colors];
     updated[colorIndex].images = updated[colorIndex].images.filter((_, idx) => idx !== imageIndex);
     setProductForm({ ...productForm, colors: updated });
@@ -250,53 +274,72 @@ export default function AdminDashboard({ onGoToStore, products = [], setProducts
   // Permanent Save (INSERT or UPDATE) to Supabase Database
   const handleSaveProduct = async (e) => {
     e.preventDefault();
+    if (uploadingImage) {
+      alert("Please wait for images to finish uploading before saving.");
+      return;
+    }
     setSavingProduct(true);
 
-    const formattedColors = productForm.colors.map(c => ({
-      name: c.name,
-      hex: c.hex,
-      images: c.images.length > 0 ? c.images : ['https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800']
-    }));
-
-    const formattedStockObj = {};
-    productForm.colors.forEach(c => {
-      formattedStockObj[c.name] = c.stock;
-    });
-
-    const dbPayload = {
-      name: productForm.name,
-      price: Number(productForm.price),
-      description: productForm.description,
-      sizes: productForm.sizes,
-      colors: formattedColors,
-      stock: formattedStockObj,
-      in_stock: true
-    };
-
-    if (editingProduct) {
-      // UPDATE in Supabase
-      const { error } = await supabase
-        .from('products')
-        .update(dbPayload)
-        .eq('id', productForm.id);
-
-      if (error) {
-        alert("Update failed: " + error.message);
+    try {
+      // 1. Clean up removed images from storage
+      if (removedImageUrls.length > 0) {
+        await Promise.all(removedImageUrls.map(url => deleteProductImage(url)));
+        setRemovedImageUrls([]);
       }
-    } else {
-      // INSERT into Supabase
-      const { error } = await supabase
-        .from('products')
-        .insert([dbPayload]);
 
-      if (error) {
-        alert("Save failed: " + error.message);
+      const formattedColors = productForm.colors.map(c => ({
+        name: c.name,
+        hex: c.hex,
+        images: c.images.length > 0 ? c.images : ['https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800']
+      }));
+
+      // Determine main image_url for single column reference
+      const primaryImageUrl = formattedColors[0]?.images?.[0] || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800';
+
+      const formattedStockObj = {};
+      productForm.colors.forEach(c => {
+        formattedStockObj[c.name] = c.stock;
+      });
+
+      const dbPayload = {
+        name: productForm.name,
+        price: Number(productForm.price),
+        description: productForm.description,
+        sizes: productForm.sizes,
+        colors: formattedColors,
+        stock: formattedStockObj,
+        in_stock: true,
+        image_url: primaryImageUrl
+      };
+
+      if (editingProduct) {
+        // UPDATE in Supabase
+        const { error } = await supabase
+          .from('products')
+          .update(dbPayload)
+          .eq('id', productForm.id);
+
+        if (error) {
+          alert("Update failed: " + error.message);
+        }
+      } else {
+        // INSERT into Supabase
+        const { error } = await supabase
+          .from('products')
+          .insert([dbPayload]);
+
+        if (error) {
+          alert("Save failed: " + error.message);
+        }
       }
+
+      if (refreshProducts) refreshProducts();
+      setIsProductModalOpen(false);
+    } catch (err) {
+      alert("Error saving product: " + err.message);
+    } finally {
+      setSavingProduct(false);
     }
-
-    setSavingProduct(false);
-    if (refreshProducts) refreshProducts();
-    setIsProductModalOpen(false);
   };
 
   if (loadingSession) {
@@ -454,7 +497,7 @@ export default function AdminDashboard({ onGoToStore, products = [], setProducts
                 <div>
                   <div className="flex items-start gap-4 mb-4">
                     <img 
-                      src={product.colors?.[0]?.images?.[0] || 'https://via.placeholder.com/100'} 
+                      src={product.image_url || product.colors?.[0]?.images?.[0] || 'https://via.placeholder.com/100'} 
                       alt={product.name} 
                       className="w-20 h-24 object-cover rounded-xl border border-stone-200"
                     />
@@ -680,12 +723,17 @@ export default function AdminDashboard({ onGoToStore, products = [], setProducts
                           <label className="block font-bold text-stone-800">
                             Photo Slots ({col.images?.length || 0} Photos)
                           </label>
-                          <label className="cursor-pointer bg-stone-800 text-white px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider hover:bg-stone-900 transition-colors">
-                            + Add Image Slot
+                          <label className={`cursor-pointer ${uploadingImage ? 'bg-stone-500' : 'bg-stone-800 hover:bg-stone-900'} text-white px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1`}>
+                            {uploadingImage ? (
+                              <span>⏳ Uploading...</span>
+                            ) : (
+                              <span>+ Add Image Slot</span>
+                            )}
                             <input 
                               type="file" 
                               accept="image/*"
                               multiple
+                              disabled={uploadingImage}
                               onChange={(e) => handleImageFileUpload(cIdx, e)}
                               className="hidden"
                             />

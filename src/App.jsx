@@ -47,7 +47,8 @@ export default function App() {
           sizes: item.sizes || ['M', 'L', 'XL'],
           colors: item.colors || [],
           stock: item.stock || {},
-          inStock: item.in_stock
+          inStock: item.in_stock,
+          image_url: item.image_url || item.colors?.[0]?.images?.[0] || ''
         }));
 
         setProducts(mapped);

@@ -3,8 +3,8 @@ import React, { useState } from 'react';
 export default function ProductCard({ product, onSelect }) {
   const [imageLoaded, setImageLoaded] = useState(false);
 
-  // Safe fallback image handling
-  const mainImage = product.colors?.[0]?.images?.[0] || 'https://via.placeholder.com/600';
+  // Safe fallback image handling prioritizing image_url
+  const mainImage = product.image_url || product.colors?.[0]?.images?.[0] || 'https://via.placeholder.com/600';
 
   return (
     <div 
